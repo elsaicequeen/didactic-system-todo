@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Text
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Text, text
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from pydantic import BaseModel
@@ -26,14 +26,23 @@ class Task(Base):
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     done = Column(Boolean, default=False)
-    priority = Column(Integer, default=4)  # 1=P1(red) 2=P2(orange) 3=P3(blue) 4=P4(grey)
+    priority = Column(Integer, default=4)
     project = Column(String, default="Inbox")
     due_date = Column(String, nullable=True)
+    owner = Column(String, default="Anish", server_default="Anish")
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
 
 
 Base.metadata.create_all(bind=engine)
+
+# Add owner column to existing tables that predate this migration
+with engine.connect() as conn:
+    try:
+        conn.execute(text("ALTER TABLE tasks ADD COLUMN owner VARCHAR DEFAULT 'Anish'"))
+        conn.commit()
+    except Exception:
+        pass  # column already exists
 
 app = FastAPI()
 
@@ -52,6 +61,7 @@ class TaskCreate(BaseModel):
     priority: int = 4
     project: str = "Inbox"
     due_date: Optional[str] = None
+    owner: str = "Anish"
 
 
 class TaskUpdate(BaseModel):
@@ -67,17 +77,16 @@ class TaskUpdate(BaseModel):
 def get_tasks(
     project: Optional[str] = None,
     done: Optional[bool] = None,
-    due_today: Optional[bool] = None,
+    owner: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     query = db.query(Task)
+    if owner:
+        query = query.filter(Task.owner == owner)
     if project:
         query = query.filter(Task.project == project)
     if done is not None:
         query = query.filter(Task.done == done)
-    if due_today:
-        today = datetime.utcnow().date().isoformat()
-        query = query.filter(Task.due_date <= today, Task.done == False)
     return query.order_by(Task.priority, Task.created_at).all()
 
 
@@ -118,14 +127,12 @@ def delete_task(task_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/api/projects")
-def get_projects(db: Session = Depends(get_db)):
-    from sqlalchemy import func
-    rows = db.query(Task.project, func.count(Task.id).label("total"),
-                    func.sum(Task.done.cast(Integer) if hasattr(Task.done, 'cast') else 0)).group_by(Task.project).all()
-    projects = db.query(Task.project).filter(Task.done == False).distinct().all()
-    all_projects = db.query(Task.project).distinct().all()
+def get_projects(owner: Optional[str] = None, db: Session = Depends(get_db)):
+    query = db.query(Task.project, Task.done)
+    if owner:
+        query = query.filter(Task.owner == owner)
     counts = {}
-    for row in db.query(Task.project, Task.done).all():
+    for row in query.all():
         p = row[0]
         if p not in counts:
             counts[p] = {"total": 0, "pending": 0}
