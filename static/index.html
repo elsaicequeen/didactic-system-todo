@@ -169,6 +169,15 @@
     .color-swatch { width: 22px; height: 22px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: transform .1s; }
     .color-swatch:hover, .color-swatch.selected { transform: scale(1.2); border-color: rgba(0,0,0,.2); }
 
+    /* Sort controls */
+    .sort-bar { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+    .sort-label { font-size: 11.5px; color: var(--text-muted); }
+    .sort-btn { padding: 3px 10px; border-radius: 10px; border: 1px solid var(--border-strong); background: none; cursor: pointer; font-size: 12px; color: var(--text-muted); font-family: inherit; transition: all .12s; display: flex; align-items: center; gap: 4px; }
+    .sort-btn:hover { border-color: #bbb; color: var(--text); }
+    .sort-btn.active { background: var(--text); color: #fff; border-color: var(--text); }
+    .sort-btn svg { transition: transform .15s; }
+    .sort-btn.desc svg { transform: rotate(180deg); }
+
     /* Keyboard hint */
     .kbd { display: inline-block; padding: 1px 5px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 3px; font-size: 11px; color: var(--text-muted); font-family: monospace; }
 
@@ -370,6 +379,7 @@
     <div class="topbar">
       <div class="view-title" id="view-title">Inbox</div>
       <div class="view-subtitle" id="view-subtitle"></div>
+      <div id="sort-bar"></div>
     </div>
     <div class="task-area" id="task-area">
       <!-- rendered by JS -->
@@ -448,6 +458,8 @@ let state = {
   newDue: '',
   addFormOpen: false,
   selectedProjectColor: PROJECT_COLORS[4],
+  sortBy: 'priority',   // 'priority' | 'due'
+  sortDir: 'asc',
 };
 
 // ── API ─────────────────────────────────────────────────────────────────────
@@ -504,6 +516,21 @@ function filteredTasks(done) {
     const p = state.view.slice(8);
     tasks = tasks.filter(t => t.project === p);
   }
+  if (state.view === 'all') {
+    const dir = state.sortDir === 'asc' ? 1 : -1;
+    if (state.sortBy === 'priority') {
+      tasks = tasks.sort((a,b) => dir * (a.priority - b.priority) || a.id - b.id);
+    } else {
+      // nulls last regardless of direction
+      tasks = tasks.sort((a,b) => {
+        if (!a.due_date && !b.due_date) return 0;
+        if (!a.due_date) return 1;
+        if (!b.due_date) return -1;
+        return dir * a.due_date.localeCompare(b.due_date);
+      });
+    }
+    return tasks;
+  }
   return tasks.sort((a,b) => a.priority - b.priority || a.id - b.id);
 }
 
@@ -538,8 +565,32 @@ function projectColor(name) {
 // ── Render ───────────────────────────────────────────────────────────────────
 function render() {
   renderTitle();
+  renderSortBar();
   renderTaskArea();
   updateCounts();
+}
+
+function renderSortBar() {
+  const bar = document.getElementById('sort-bar');
+  if (state.view !== 'all') { bar.innerHTML = ''; return; }
+  const chevron = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="18 15 12 9 6 15"/></svg>`;
+  bar.innerHTML = `<div class="sort-bar">
+    <span class="sort-label">Sort by</span>
+    <button class="sort-btn ${state.sortBy==='priority'?'active':''} ${state.sortBy==='priority'&&state.sortDir==='desc'?'desc':''}"
+      onclick="setSortBy('priority')">${chevron} Priority</button>
+    <button class="sort-btn ${state.sortBy==='due'?'active':''} ${state.sortBy==='due'&&state.sortDir==='desc'?'desc':''}"
+      onclick="setSortBy('due')">${chevron} Deadline</button>
+  </div>`;
+}
+
+function setSortBy(field) {
+  if (state.sortBy === field) {
+    state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    state.sortBy = field;
+    state.sortDir = 'asc';
+  }
+  render();
 }
 
 function renderTitle() {
