@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tasks</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --red: #db4035;
+      --red-light: #fdf2f2;
+      --orange: #ff8c00;
+      --blue: #4073ff;
+      --gray: #9e9e9e;
+      --p1: #db4035;
+      --p2: #ff8c00;
+      --p3: #4073ff;
+      --p4: #9e9e9e;
+      --sidebar-bg: #1f1f1f;
+      --sidebar-hover: #2d2d2d;
+      --sidebar-active: #333;
+      --sidebar-text: #d4d4d4;
+      --sidebar-muted: #888;
+      --bg: #ffffff;
+      --surface: #fafafa;
+      --border: #f0f0f0;
+      --border-strong: #e0e0e0;
+      --text: #202020;
+      --text-muted: #777;
+      --accent: #db4035;
+      --accent-hover: #c0392b;
+      --task-hover: #f8f8f8;
+      --radius: 6px;
+      --shadow: 0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.04);
+      --shadow-modal: 0 8px 40px rgba(0,0,0,.16);
+    }
+    html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; color: var(--text); background: var(--bg); }
+
+    /* Layout */
+    .app { display: flex; height: 100vh; overflow: hidden; }
+
+    /* Sidebar */
+    .sidebar { width: 240px; min-width: 240px; background: var(--sidebar-bg); display: flex; flex-direction: column; overflow-y: auto; user-select: none; }
+    .sidebar-logo { padding: 18px 16px 8px; display: flex; align-items: center; gap: 8px; }
+    .sidebar-logo svg { color: var(--accent); }
+    .sidebar-logo span { font-size: 16px; font-weight: 700; color: #fff; letter-spacing: -.3px; }
+    .sidebar-section { padding: 4px 8px; }
+    .sidebar-section-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .7px; color: var(--sidebar-muted); padding: 8px 8px 4px; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: var(--radius); cursor: pointer; color: var(--sidebar-text); transition: background .12s; font-size: 13.5px; position: relative; }
+    .nav-item:hover { background: var(--sidebar-hover); }
+    .nav-item.active { background: var(--sidebar-active); color: #fff; }
+    .nav-item .icon { width: 18px; height: 18px; flex-shrink: 0; opacity: .8; }
+    .nav-item .label { flex: 1; }
+    .nav-item .count { font-size: 11px; color: var(--sidebar-muted); font-weight: 500; }
+    .nav-item.active .count { color: rgba(255,255,255,.6); }
+    .project-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .sidebar-footer { margin-top: auto; padding: 8px; }
+    .add-project-btn { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: var(--radius); cursor: pointer; color: var(--sidebar-muted); font-size: 13px; transition: all .12s; border: none; background: none; width: 100%; text-align: left; }
+    .add-project-btn:hover { color: var(--sidebar-text); background: var(--sidebar-hover); }
+
+    /* Main */
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+    .topbar { padding: 20px 32px 0; }
+    .view-title { font-size: 20px; font-weight: 700; color: var(--text); letter-spacing: -.4px; }
+    .view-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .task-area { flex: 1; overflow-y: auto; padding: 16px 32px 32px; }
+
+    /* Quick add */
+    .quick-add { border: 1.5px dashed var(--border-strong); border-radius: var(--radius); padding: 10px 12px; display: flex; align-items: center; gap: 10px; cursor: pointer; color: var(--text-muted); font-size: 13.5px; transition: all .12s; margin-bottom: 8px; }
+    .quick-add:hover { border-color: var(--accent); color: var(--accent); background: var(--red-light); }
+    .quick-add svg { flex-shrink: 0; }
+
+    /* Add task form */
+    .add-form { border: 1.5px solid var(--border-strong); border-radius: var(--radius); padding: 12px; margin-bottom: 16px; background: var(--bg); box-shadow: var(--shadow); }
+    .add-form-row { display: flex; align-items: center; gap: 8px; }
+    .add-form input[type=text] { flex: 1; border: none; outline: none; font-size: 14px; font-family: inherit; color: var(--text); background: transparent; }
+    .add-form input[type=text]::placeholder { color: var(--text-muted); }
+    .add-form-meta { display: flex; align-items: center; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+    .meta-btn { display: flex; align-items: center; gap: 5px; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-strong); background: none; cursor: pointer; font-size: 12px; color: var(--text-muted); font-family: inherit; transition: all .12s; }
+    .meta-btn:hover { border-color: #bbb; color: var(--text); }
+    .meta-btn.has-value { color: var(--text); border-color: #bbb; }
+    .form-actions { margin-left: auto; display: flex; gap: 8px; }
+    .btn-cancel { padding: 6px 12px; border-radius: 4px; border: none; background: var(--surface); cursor: pointer; font-size: 13px; color: var(--text-muted); font-family: inherit; transition: background .12s; }
+    .btn-cancel:hover { background: var(--border); }
+    .btn-submit { padding: 6px 12px; border-radius: 4px; border: none; background: var(--accent); cursor: pointer; font-size: 13px; color: #fff; font-family: inherit; font-weight: 500; transition: background .12s; }
+    .btn-submit:hover { background: var(--accent-hover); }
+    .btn-submit:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* Priority selector */
+    .priority-dropdown, .project-dropdown { position: relative; }
+    .dropdown-menu { position: absolute; top: calc(100% + 4px); left: 0; background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--radius); box-shadow: var(--shadow-modal); z-index: 100; min-width: 160px; overflow: hidden; }
+    .dropdown-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; font-size: 13px; color: var(--text); transition: background .1s; }
+    .dropdown-item:hover { background: var(--surface); }
+    .p-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+
+    /* Section headers */
+    .section-header { font-size: 13px; font-weight: 600; color: var(--text-muted); margin: 20px 0 6px; display: flex; align-items: center; gap: 6px; }
+    .section-header::after { content: ''; flex: 1; height: 1px; background: var(--border); margin-left: 4px; }
+    .section-count { font-weight: 400; font-size: 12px; }
+
+    /* Task item */
+    .task-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border-radius: var(--radius); transition: background .1s; position: relative; border: 1px solid transparent; }
+    .task-item:hover { background: var(--task-hover); }
+    .task-item:hover .task-actions { opacity: 1; }
+    .task-item.done .task-title { color: var(--text-muted); text-decoration: line-through; }
+    .task-checkbox { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--p4); cursor: pointer; flex-shrink: 0; margin-top: 2px; transition: all .15s; background: transparent; appearance: none; -webkit-appearance: none; }
+    .task-checkbox.p1 { border-color: var(--p1); }
+    .task-checkbox.p2 { border-color: var(--p2); }
+    .task-checkbox.p3 { border-color: var(--p3); }
+    .task-checkbox:checked { background: var(--p4); border-color: var(--p4); background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 10 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 4l2.5 2.5L9 1' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: center; background-size: 10px; }
+    .task-checkbox.p1:checked { background-color: var(--p1); border-color: var(--p1); }
+    .task-checkbox.p2:checked { background-color: var(--p2); border-color: var(--p2); }
+    .task-checkbox.p3:checked { background-color: var(--p3); border-color: var(--p3); }
+    .task-body { flex: 1; min-width: 0; }
+    .task-title { font-size: 13.5px; line-height: 1.4; color: var(--text); cursor: pointer; word-break: break-word; }
+    .task-title:hover { color: var(--accent); }
+    .task-desc { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .task-meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
+    .task-due { font-size: 11.5px; display: flex; align-items: center; gap: 3px; }
+    .task-due.overdue { color: var(--p1); }
+    .task-due.today { color: var(--p2); }
+    .task-due.future { color: var(--text-muted); }
+    .task-project-badge { font-size: 11px; padding: 1px 6px; border-radius: 3px; color: #fff; font-weight: 500; }
+    .task-priority-badge { font-size: 11px; padding: 1px 5px; border-radius: 3px; font-weight: 600; }
+    .task-actions { opacity: 0; display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+    .action-btn { width: 26px; height: 26px; border-radius: 4px; border: none; background: none; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-muted); transition: all .1s; }
+    .action-btn:hover { background: var(--border); color: var(--text); }
+    .action-btn.delete:hover { background: #fdf2f2; color: var(--p1); }
+
+    /* Edit modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 200; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity .15s; }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+    .modal { background: var(--bg); border-radius: 10px; width: 540px; max-width: 90vw; box-shadow: var(--shadow-modal); transform: translateY(8px) scale(.98); transition: transform .15s; }
+    .modal-overlay.open .modal { transform: translateY(0) scale(1); }
+    .modal-header { padding: 20px 20px 0; }
+    .modal-body { padding: 12px 20px 0; }
+    .modal-footer { padding: 12px 20px 16px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); margin-top: 16px; }
+    .modal input[type=text], .modal textarea { width: 100%; border: none; outline: none; font-family: inherit; color: var(--text); background: transparent; resize: none; }
+    .modal-title-input { font-size: 16px; font-weight: 500; }
+    .modal-desc-input { font-size: 13px; color: var(--text-muted); min-height: 40px; margin-top: 6px; }
+    .modal-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+
+    /* Project add modal */
+    .mini-modal { background: var(--bg); border-radius: var(--radius); width: 300px; max-width: 90vw; box-shadow: var(--shadow-modal); padding: 16px; transform: translateY(8px) scale(.98); transition: transform .15s; }
+    .modal-overlay.open .mini-modal { transform: translateY(0) scale(1); }
+    .mini-modal h3 { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+    .mini-modal input { width: 100%; padding: 7px 10px; border: 1.5px solid var(--border-strong); border-radius: 4px; font-size: 13px; font-family: inherit; outline: none; }
+    .mini-modal input:focus { border-color: var(--accent); }
+    .mini-modal .actions { display: flex; gap: 8px; margin-top: 12px; justify-content: flex-end; }
+
+    /* Completed section toggle */
+    .completed-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--text-muted); font-size: 12.5px; padding: 6px 4px; border: none; background: none; font-family: inherit; margin-top: 8px; }
+    .completed-toggle:hover { color: var(--text); }
+    .completed-toggle svg { transition: transform .15s; }
+    .completed-toggle.open svg { transform: rotate(90deg); }
+
+    /* Empty state */
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .empty-state svg { margin: 0 auto 12px; display: block; opacity: .3; }
+    .empty-state p { font-size: 14px; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
+
+    /* Color swatches for projects */
+    .color-row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .color-swatch { width: 22px; height: 22px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: transform .1s; }
+    .color-swatch:hover, .color-swatch.selected { transform: scale(1.2); border-color: rgba(0,0,0,.2); }
+
+    /* Keyboard hint */
+    .kbd { display: inline-block; padding: 1px 5px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 3px; font-size: 11px; color: var(--text-muted); font-family: monospace; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <!-- Sidebar -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <span>Tasks</span>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="nav-item active" data-view="inbox" onclick="setView('inbox',this)">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+        <span class="label">Inbox</span>
+        <span class="count" id="count-inbox"></span>
+      </div>
+      <div class="nav-item" data-view="today" onclick="setView('today',this)">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span class="label">Today</span>
+        <span class="count" id="count-today"></span>
+      </div>
+      <div class="nav-item" data-view="upcoming" onclick="setView('upcoming',this)">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+        <span class="label">Upcoming</span>
+      </div>
+      <div class="nav-item" data-view="all" onclick="setView('all',this)">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        <span class="label">All Tasks</span>
+      </div>
+    </div>
+
+    <div class="sidebar-section" style="margin-top:8px">
+      <div class="sidebar-section-label">Projects</div>
+      <div id="project-nav"></div>
+    </div>
+
+    <div class="sidebar-footer">
+      <button class="add-project-btn" onclick="openAddProject()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add project
+      </button>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="topbar">
+      <div class="view-title" id="view-title">Inbox</div>
+      <div class="view-subtitle" id="view-subtitle"></div>
+    </div>
+    <div class="task-area" id="task-area">
+      <!-- rendered by JS -->
+    </div>
+  </main>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <input class="modal-title-input" type="text" id="edit-title" placeholder="Task name" />
+    </div>
+    <div class="modal-body">
+      <textarea class="modal-desc-input" id="edit-desc" placeholder="Description" rows="2"></textarea>
+      <div class="modal-meta">
+        <div class="priority-dropdown" style="position:relative">
+          <button class="meta-btn has-value" id="edit-priority-btn" onclick="toggleDropdown('edit-priority-dd')">
+            <span id="edit-priority-dot" class="p-dot"></span>
+            <span id="edit-priority-label">P4</span>
+          </button>
+          <div class="dropdown-menu" id="edit-priority-dd" style="display:none">
+            <div class="dropdown-item" onclick="setEditPriority(1)"><span class="p-dot" style="background:var(--p1)"></span>P1 — Urgent</div>
+            <div class="dropdown-item" onclick="setEditPriority(2)"><span class="p-dot" style="background:var(--p2)"></span>P2 — High</div>
+            <div class="dropdown-item" onclick="setEditPriority(3)"><span class="p-dot" style="background:var(--p3)"></span>P3 — Medium</div>
+            <div class="dropdown-item" onclick="setEditPriority(4)"><span class="p-dot" style="background:var(--p4)"></span>P4 — Normal</div>
+          </div>
+        </div>
+        <div class="project-dropdown" style="position:relative">
+          <button class="meta-btn" id="edit-project-btn" onclick="toggleDropdown('edit-project-dd')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <span id="edit-project-label">Inbox</span>
+          </button>
+          <div class="dropdown-menu" id="edit-project-dd" style="display:none" id="edit-project-list"></div>
+        </div>
+        <input type="date" class="meta-btn" id="edit-due" style="font-family:inherit;cursor:pointer" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" style="color:var(--p1)" onclick="deleteCurrentTask()">Delete task</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn-cancel" onclick="closeEditModal()">Cancel</button>
+        <button class="btn-submit" onclick="saveEditModal()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Project Modal -->
+<div class="modal-overlay" id="project-modal">
+  <div class="mini-modal">
+    <h3>New project</h3>
+    <input type="text" id="new-project-name" placeholder="Project name" onkeydown="if(event.key==='Enter')saveNewProject()" />
+    <div class="color-row" id="color-row"></div>
+    <div class="actions">
+      <button class="btn-cancel" onclick="closeProjectModal()">Cancel</button>
+      <button class="btn-submit" onclick="saveNewProject()">Add</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ───────────────────────────────────────────────────────────────────
+const PROJECT_COLORS = ['#e44332','#e9952c','#fad000','#afb83b','#7ecc49','#299438','#6accbc','#158fad','#14aaf5','#96c3eb','#4073ff','#884dff','#af38eb','#eb96eb','#e05194','#ff8d85','#808080','#b8b8b8'];
+let state = {
+  view: 'inbox',
+  tasks: [],
+  projects: [],
+  projectColors: JSON.parse(localStorage.getItem('projectColors') || '{}'),
+  completedOpen: false,
+  editTaskId: null,
+  editPriority: 4,
+  editProject: 'Inbox',
+  newPriority: 4,
+  newProject: 'Inbox',
+  newDue: '',
+  addFormOpen: false,
+  selectedProjectColor: PROJECT_COLORS[4],
+};
+
+// ── API ─────────────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const res = await fetch(path, {
+    method,
+    headers: body ? {'Content-Type':'application/json'} : {},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function loadTasks() {
+  state.tasks = await api('GET', '/api/tasks');
+  await loadProjects();
+  render();
+}
+
+async function loadProjects() {
+  state.projects = await api('GET', '/api/projects');
+  renderSidebar();
+}
+
+// ── View helpers ─────────────────────────────────────────────────────────────
+function setView(view, el) {
+  state.view = view;
+  state.addFormOpen = false;
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  if (el) el.classList.add('active');
+  render();
+}
+
+function filteredTasks(done) {
+  const today = new Date().toISOString().split('T')[0];
+  let tasks = state.tasks.filter(t => t.done === done);
+  if (state.view === 'inbox') tasks = tasks.filter(t => t.project === 'Inbox');
+  else if (state.view === 'today') tasks = tasks.filter(t => t.due_date && t.due_date <= today);
+  else if (state.view === 'upcoming') tasks = tasks.filter(t => t.due_date && t.due_date > today);
+  else if (state.view.startsWith('project:')) {
+    const p = state.view.slice(8);
+    tasks = tasks.filter(t => t.project === p);
+  }
+  return tasks.sort((a,b) => a.priority - b.priority || a.id - b.id);
+}
+
+const PRIORITY_META = {
+  1: {label:'P1', color:'var(--p1)', bg:'#fdf2f2'},
+  2: {label:'P2', color:'var(--p2)', bg:'#fff8f0'},
+  3: {label:'P3', color:'var(--p3)', bg:'#f0f4ff'},
+  4: {label:'P4', color:'var(--p4)', bg:'#f5f5f5'},
+};
+
+function dueMeta(dueDate) {
+  if (!dueDate) return null;
+  const today = new Date().toISOString().split('T')[0];
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+  if (dueDate < today) return {cls:'overdue', label: fmtDate(dueDate) + ' (overdue)'};
+  if (dueDate === today) return {cls:'today', label:'Today'};
+  if (dueDate === tomorrow) return {cls:'future', label:'Tomorrow'};
+  return {cls:'future', label: fmtDate(dueDate)};
+}
+
+function fmtDate(iso) {
+  const [y,m,d] = iso.split('-');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${months[+m-1]} ${+d}`;
+}
+
+function projectColor(name) {
+  return state.projectColors[name] || PROJECT_COLORS[0];
+}
+
+// ── Render ───────────────────────────────────────────────────────────────────
+function render() {
+  renderTitle();
+  renderTaskArea();
+  updateCounts();
+}
+
+function renderTitle() {
+  const titles = {
+    inbox: ['Inbox', ''],
+    today: ['Today', new Date().toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric'})],
+    upcoming: ['Upcoming', 'Tasks with future due dates'],
+    all: ['All Tasks', ''],
+  };
+  let t = titles[state.view];
+  if (!t && state.view.startsWith('project:')) {
+    const name = state.view.slice(8);
+    t = [name, ''];
+  }
+  document.getElementById('view-title').textContent = t ? t[0] : '';
+  document.getElementById('view-subtitle').textContent = t ? t[1] : '';
+}
+
+function renderSidebar() {
+  const nav = document.getElementById('project-nav');
+  const allProjects = [...new Set([...state.projects.map(p=>p.name), ...Object.keys(state.projectColors)])].filter(p=>p!=='Inbox');
+  nav.innerHTML = allProjects.map(name => {
+    const info = state.projects.find(p=>p.name===name) || {pending:0};
+    const color = projectColor(name);
+    const active = state.view === 'project:' + name;
+    return `<div class="nav-item ${active?'active':''}" data-view="project:${name}" onclick="setView('project:${encodeURIComponent(name)}',this)" data-name="${name}">
+      <span class="project-dot" style="background:${color}"></span>
+      <span class="label">${esc(name)}</span>
+      <span class="count">${info.pending||''}</span>
+    </div>`;
+  }).join('');
+  // fix onclick for encoded names
+  nav.querySelectorAll('.nav-item').forEach(el => {
+    el.onclick = function() {
+      setView('project:' + el.dataset.name, el);
+    };
+  });
+}
+
+function renderTaskArea() {
+  const area = document.getElementById('task-area');
+  const pending = filteredTasks(false);
+  const done = filteredTasks(true);
+
+  let html = '';
+
+  // Add task button / form
+  if (state.addFormOpen) {
+    html += renderAddForm();
+  } else {
+    html += `<div class="quick-add" onclick="openAddForm()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Add task <span class="kbd" style="margin-left:4px">Q</span>
+    </div>`;
+  }
+
+  if (pending.length === 0 && !state.addFormOpen) {
+    html += `<div class="empty-state">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="8 12 11 15 16 9"/></svg>
+      <p>No tasks here</p>
+    </div>`;
+  } else {
+    html += pending.map(t => renderTask(t)).join('');
+  }
+
+  // Completed section
+  if (done.length > 0) {
+    html += `<button class="completed-toggle ${state.completedOpen?'open':''}" onclick="toggleCompleted()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+      Completed (${done.length})
+    </button>`;
+    if (state.completedOpen) {
+      html += `<div style="opacity:.6">${done.map(t=>renderTask(t)).join('')}</div>`;
+    }
+  }
+
+  area.innerHTML = html;
+
+  if (state.addFormOpen) {
+    document.getElementById('new-task-input')?.focus();
+  }
+}
+
+function renderTask(t) {
+  const pm = PRIORITY_META[t.priority];
+  const dm = dueMeta(t.due_date);
+  const pClass = `p${t.priority}`;
+  return `<div class="task-item ${t.done?'done':''}" data-id="${t.id}">
+    <input type="checkbox" class="task-checkbox ${pClass}" ${t.done?'checked':''} onchange="toggleTask(${t.id},this.checked)" />
+    <div class="task-body">
+      <div class="task-title" onclick="openEditModal(${t.id})">${esc(t.title)}</div>
+      ${t.description ? `<div class="task-desc">${esc(t.description)}</div>` : ''}
+      <div class="task-meta">
+        ${dm ? `<span class="task-due ${dm.cls}">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          ${dm.label}
+        </span>` : ''}
+        ${t.project !== 'Inbox' && state.view !== 'project:'+t.project ? `<span class="task-project-badge" style="background:${projectColor(t.project)}">${esc(t.project)}</span>` : ''}
+        ${t.priority < 4 ? `<span class="task-priority-badge" style="color:${pm.color};background:${pm.bg}">${pm.label}</span>` : ''}
+      </div>
+    </div>
+    <div class="task-actions">
+      <button class="action-btn" title="Edit" onclick="openEditModal(${t.id})">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </button>
+      <button class="action-btn delete" title="Delete" onclick="deleteTask(${t.id})">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+      </button>
+    </div>
+  </div>`;
+}
+
+function renderAddForm() {
+  const pm = PRIORITY_META[state.newPriority];
+  const projectLabel = state.newProject;
+  return `<div class="add-form">
+    <div class="add-form-row">
+      <span class="p-dot" style="background:${pm.color};width:10px;height:10px;border-radius:50%;flex-shrink:0"></span>
+      <input id="new-task-input" type="text" placeholder="Task name" onkeydown="handleAddKey(event)" />
+    </div>
+    <div class="add-form-meta">
+      <div class="priority-dropdown" style="position:relative">
+        <button class="meta-btn ${state.newPriority<4?'has-value':''}" onclick="toggleDropdown('new-priority-dd')" id="new-priority-btn">
+          <span class="p-dot" style="background:${pm.color}"></span>
+          ${pm.label}
+        </button>
+        <div class="dropdown-menu" id="new-priority-dd" style="display:none">
+          ${[1,2,3,4].map(p=>`<div class="dropdown-item" onclick="setNewPriority(${p})"><span class="p-dot" style="background:${PRIORITY_META[p].color}"></span>${PRIORITY_META[p].label}</div>`).join('')}
+        </div>
+      </div>
+      <div class="project-dropdown" style="position:relative">
+        <button class="meta-btn ${projectLabel!=='Inbox'?'has-value':''}" onclick="toggleDropdown('new-project-dd')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          ${esc(projectLabel)}
+        </button>
+        <div class="dropdown-menu" id="new-project-dd" style="display:none">
+          ${['Inbox',...new Set([...state.projects.map(p=>p.name),...Object.keys(state.projectColors)].filter(p=>p!=='Inbox'))].map(p=>`
+            <div class="dropdown-item" onclick="setNewProject('${esc(p)}')">
+              <span class="p-dot" style="background:${projectColor(p)}"></span>${esc(p)}
+            </div>`).join('')}
+        </div>
+      </div>
+      <input type="date" class="meta-btn" id="new-due-input" value="${state.newDue}" onchange="state.newDue=this.value" style="font-family:inherit;cursor:pointer" />
+      <div class="form-actions">
+        <button class="btn-cancel" onclick="closeAddForm()">Cancel</button>
+        <button class="btn-submit" onclick="submitAddForm()">Add task</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── Actions ──────────────────────────────────────────────────────────────────
+function openAddForm() {
+  if (state.view.startsWith('project:')) state.newProject = state.view.slice(8);
+  else if (state.view === 'inbox') state.newProject = 'Inbox';
+  state.addFormOpen = true;
+  render();
+}
+
+function closeAddForm() {
+  state.addFormOpen = false;
+  state.newPriority = 4;
+  state.newProject = 'Inbox';
+  state.newDue = '';
+  render();
+}
+
+function handleAddKey(e) {
+  if (e.key === 'Enter') submitAddForm();
+  if (e.key === 'Escape') closeAddForm();
+}
+
+async function submitAddForm() {
+  const title = document.getElementById('new-task-input')?.value?.trim();
+  if (!title) return;
+  const due = document.getElementById('new-due-input')?.value || null;
+  await api('POST', '/api/tasks', {
+    title,
+    priority: state.newPriority,
+    project: state.newProject,
+    due_date: due || null,
+  });
+  state.addFormOpen = false;
+  state.newPriority = 4;
+  state.newProject = 'Inbox';
+  state.newDue = '';
+  await loadTasks();
+}
+
+async function toggleTask(id, done) {
+  await api('PATCH', `/api/tasks/${id}`, {done});
+  await loadTasks();
+}
+
+async function deleteTask(id) {
+  await api('DELETE', `/api/tasks/${id}`);
+  await loadTasks();
+}
+
+function toggleCompleted() {
+  state.completedOpen = !state.completedOpen;
+  render();
+}
+
+function setNewPriority(p) {
+  state.newPriority = p;
+  closeAllDropdowns();
+  render();
+}
+
+function setNewProject(p) {
+  state.newProject = p;
+  closeAllDropdowns();
+  render();
+}
+
+// ── Edit Modal ────────────────────────────────────────────────────────────────
+function openEditModal(id) {
+  const task = state.tasks.find(t => t.id === id);
+  if (!task) return;
+  state.editTaskId = id;
+  state.editPriority = task.priority;
+  state.editProject = task.project;
+  document.getElementById('edit-title').value = task.title;
+  document.getElementById('edit-desc').value = task.description || '';
+  document.getElementById('edit-due').value = task.due_date || '';
+  updateEditPriorityUI();
+  updateEditProjectUI();
+  populateEditProjectDropdown();
+  document.getElementById('edit-modal').classList.add('open');
+}
+
+function closeEditModal() {
+  document.getElementById('edit-modal').classList.remove('open');
+  state.editTaskId = null;
+}
+
+function updateEditPriorityUI() {
+  const pm = PRIORITY_META[state.editPriority];
+  document.getElementById('edit-priority-dot').style.background = pm.color;
+  document.getElementById('edit-priority-label').textContent = pm.label;
+}
+
+function updateEditProjectUI() {
+  document.getElementById('edit-project-label').textContent = state.editProject;
+}
+
+function populateEditProjectDropdown() {
+  const dd = document.getElementById('edit-project-dd');
+  const allP = ['Inbox', ...new Set([...state.projects.map(p=>p.name),...Object.keys(state.projectColors)].filter(p=>p!=='Inbox'))];
+  dd.innerHTML = allP.map(p => `<div class="dropdown-item" onclick="setEditProject('${esc(p)}')">
+    <span class="p-dot" style="background:${projectColor(p)}"></span>${esc(p)}
+  </div>`).join('');
+}
+
+function setEditPriority(p) {
+  state.editPriority = p;
+  updateEditPriorityUI();
+  closeAllDropdowns();
+}
+
+function setEditProject(p) {
+  state.editProject = p;
+  updateEditProjectUI();
+  closeAllDropdowns();
+}
+
+async function saveEditModal() {
+  if (!state.editTaskId) return;
+  await api('PATCH', `/api/tasks/${state.editTaskId}`, {
+    title: document.getElementById('edit-title').value.trim(),
+    description: document.getElementById('edit-desc').value.trim() || null,
+    priority: state.editPriority,
+    project: state.editProject,
+    due_date: document.getElementById('edit-due').value || null,
+  });
+  closeEditModal();
+  await loadTasks();
+}
+
+async function deleteCurrentTask() {
+  if (!state.editTaskId) return;
+  await api('DELETE', `/api/tasks/${state.editTaskId}`);
+  closeEditModal();
+  await loadTasks();
+}
+
+// ── Add Project ───────────────────────────────────────────────────────────────
+function openAddProject() {
+  state.selectedProjectColor = PROJECT_COLORS[Math.floor(Math.random()*PROJECT_COLORS.length)];
+  document.getElementById('new-project-name').value = '';
+  renderColorRow();
+  document.getElementById('project-modal').classList.add('open');
+  setTimeout(() => document.getElementById('new-project-name').focus(), 50);
+}
+
+function closeProjectModal() {
+  document.getElementById('project-modal').classList.remove('open');
+}
+
+function renderColorRow() {
+  const row = document.getElementById('color-row');
+  row.innerHTML = PROJECT_COLORS.map(c =>
+    `<div class="color-swatch ${c===state.selectedProjectColor?'selected':''}" style="background:${c}" onclick="selectColor('${c}')"></div>`
+  ).join('');
+}
+
+function selectColor(c) {
+  state.selectedProjectColor = c;
+  renderColorRow();
+}
+
+function saveNewProject() {
+  const name = document.getElementById('new-project-name').value.trim();
+  if (!name) return;
+  state.projectColors[name] = state.selectedProjectColor;
+  localStorage.setItem('projectColors', JSON.stringify(state.projectColors));
+  closeProjectModal();
+  renderSidebar();
+  setView('project:' + name, null);
+  // highlight correct nav item after re-render
+  document.querySelectorAll('#project-nav .nav-item').forEach(el => {
+    if (el.dataset.name === name) el.classList.add('active');
+    else el.classList.remove('active');
+  });
+}
+
+// ── Counts ────────────────────────────────────────────────────────────────────
+function updateCounts() {
+  const today = new Date().toISOString().split('T')[0];
+  const pending = state.tasks.filter(t => !t.done);
+  const inboxCount = pending.filter(t => t.project === 'Inbox').length;
+  const todayCount = pending.filter(t => t.due_date && t.due_date <= today).length;
+  document.getElementById('count-inbox').textContent = inboxCount || '';
+  document.getElementById('count-today').textContent = todayCount || '';
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+function esc(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function toggleDropdown(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const wasOpen = el.style.display !== 'none';
+  closeAllDropdowns();
+  if (!wasOpen) el.style.display = 'block';
+}
+
+function closeAllDropdowns() {
+  document.querySelectorAll('.dropdown-menu').forEach(d => d.style.display = 'none');
+}
+
+// ── Keyboard shortcuts ────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  const tag = document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if (e.key === 'q' || e.key === 'Q') { e.preventDefault(); openAddForm(); }
+  if (e.key === 'Escape') {
+    closeAddForm();
+    closeEditModal();
+    closeAllDropdowns();
+    closeProjectModal();
+  }
+});
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.dropdown-menu') && !e.target.closest('.meta-btn') && !e.target.closest('.priority-dropdown') && !e.target.closest('.project-dropdown')) {
+    closeAllDropdowns();
+  }
+  if (e.target === document.getElementById('edit-modal')) closeEditModal();
+  if (e.target === document.getElementById('project-modal')) closeProjectModal();
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+loadTasks();
+</script>
+</body>
+</html>
