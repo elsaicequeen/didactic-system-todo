@@ -59,7 +59,7 @@ with engine.connect() as conn:
             conn.execute(text(ddl))
             conn.commit()
         except Exception:
-            pass
+            conn.rollback()
 
 # Hard-purge soft-deleted tasks older than 30 days on startup.
 with SessionLocal() as db:
