@@ -5,9 +5,10 @@ from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 import os
+import calendar as cal
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./tasks.db")
 
@@ -30,8 +31,10 @@ class Task(Base):
     project = Column(String, default="Inbox")
     due_date = Column(String, nullable=True)
     owner = Column(String, default="Anish", server_default="Anish")
+    recurrence = Column(String, nullable=True)  # 'daily' | 'weekdays' | 'weekly' | 'monthly'
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
+    deleted_at = Column(DateTime, nullable=True)
 
 
 class Project(Base):
@@ -44,13 +47,26 @@ class Project(Base):
 
 Base.metadata.create_all(bind=engine)
 
-# Migrate: add owner column to tasks if it predates this column
+# Lightweight migrations for columns added after the initial schema.
+# ALTER ADD COLUMN throws if the column already exists; swallow that.
 with engine.connect() as conn:
-    try:
-        conn.execute(text("ALTER TABLE tasks ADD COLUMN owner VARCHAR DEFAULT 'Anish'"))
-        conn.commit()
-    except Exception:
-        pass
+    for ddl in [
+        "ALTER TABLE tasks ADD COLUMN owner VARCHAR DEFAULT 'Anish'",
+        "ALTER TABLE tasks ADD COLUMN recurrence VARCHAR",
+        "ALTER TABLE tasks ADD COLUMN deleted_at TIMESTAMP",
+    ]:
+        try:
+            conn.execute(text(ddl))
+            conn.commit()
+        except Exception:
+            pass
+
+# Hard-purge soft-deleted tasks older than 30 days on startup.
+with SessionLocal() as db:
+    cutoff = datetime.utcnow() - timedelta(days=30)
+    db.query(Task).filter(Task.deleted_at != None, Task.deleted_at < cutoff).delete(synchronize_session=False)
+    db.commit()
+
 
 app = FastAPI()
 
@@ -63,6 +79,29 @@ def get_db():
         db.close()
 
 
+def advance_due_date(due: Optional[str], recurrence: str) -> Optional[str]:
+    """Bump an ISO date forward according to the recurrence rule.
+    If no due date set, base the next occurrence on today."""
+    base = datetime.fromisoformat(due).date() if due else datetime.utcnow().date()
+    if recurrence == "daily":
+        nxt = base + timedelta(days=1)
+    elif recurrence == "weekly":
+        nxt = base + timedelta(days=7)
+    elif recurrence == "weekdays":
+        nxt = base + timedelta(days=1)
+        while nxt.weekday() >= 5:
+            nxt += timedelta(days=1)
+    elif recurrence == "monthly":
+        m = base.month + 1
+        y = base.year + (1 if m > 12 else 0)
+        m = ((m - 1) % 12) + 1
+        last = cal.monthrange(y, m)[1]
+        nxt = base.replace(year=y, month=m, day=min(base.day, last))
+    else:
+        return due
+    return nxt.isoformat()
+
+
 class TaskCreate(BaseModel):
     title: str
     description: Optional[str] = None
@@ -70,6 +109,7 @@ class TaskCreate(BaseModel):
     project: str = "Inbox"
     due_date: Optional[str] = None
     owner: str = "Anish"
+    recurrence: Optional[str] = None
 
 
 class TaskUpdate(BaseModel):
@@ -79,6 +119,7 @@ class TaskUpdate(BaseModel):
     priority: Optional[int] = None
     project: Optional[str] = None
     due_date: Optional[str] = None
+    recurrence: Optional[str] = None
 
 
 class ProjectCreate(BaseModel):
@@ -98,7 +139,7 @@ def get_tasks(
     owner: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
-    query = db.query(Task)
+    query = db.query(Task).filter(Task.deleted_at == None)
     if owner:
         query = query.filter(Task.owner == owner)
     if project:
@@ -123,6 +164,21 @@ def update_task(task_id: int, task: TaskUpdate, db: Session = Depends(get_db)):
     if not db_task:
         raise HTTPException(status_code=404, detail="Task not found")
     update_data = task.dict(exclude_unset=True)
+
+    # Recurring task completion: spawn the next instance, then mark current done.
+    if update_data.get("done") and db_task.recurrence and not db_task.done:
+        next_due = advance_due_date(db_task.due_date, db_task.recurrence)
+        spawn = Task(
+            title=db_task.title,
+            description=db_task.description,
+            priority=db_task.priority,
+            project=db_task.project,
+            owner=db_task.owner,
+            due_date=next_due,
+            recurrence=db_task.recurrence,
+        )
+        db.add(spawn)
+
     if update_data.get("done"):
         update_data["completed_at"] = datetime.utcnow()
     elif "done" in update_data and not update_data["done"]:
@@ -136,18 +192,29 @@ def update_task(task_id: int, task: TaskUpdate, db: Session = Depends(get_db)):
 
 @app.delete("/api/tasks/{task_id}")
 def delete_task(task_id: int, db: Session = Depends(get_db)):
+    """Soft-delete: set deleted_at. Auto-purged after 30 days on startup."""
     db_task = db.query(Task).filter(Task.id == task_id).first()
     if not db_task:
         raise HTTPException(status_code=404, detail="Task not found")
-    db.delete(db_task)
+    db_task.deleted_at = datetime.utcnow()
     db.commit()
-    return {"ok": True}
+    return {"ok": True, "id": task_id}
+
+
+@app.post("/api/tasks/{task_id}/restore")
+def restore_task(task_id: int, db: Session = Depends(get_db)):
+    db_task = db.query(Task).filter(Task.id == task_id).first()
+    if not db_task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    db_task.deleted_at = None
+    db.commit()
+    db.refresh(db_task)
+    return db_task
 
 
 @app.get("/api/projects")
 def get_projects(owner: Optional[str] = None, db: Session = Depends(get_db)):
-    # Task counts per project
-    task_query = db.query(Task.project, Task.done)
+    task_query = db.query(Task.project, Task.done).filter(Task.deleted_at == None)
     if owner:
         task_query = task_query.filter(Task.owner == owner)
     counts: dict = {}
@@ -159,23 +226,21 @@ def get_projects(owner: Optional[str] = None, db: Session = Depends(get_db)):
         if not row[1]:
             counts[p]["pending"] += 1
 
-    # Colors from projects table
     proj_query = db.query(Project)
     if owner:
         proj_query = proj_query.filter(Project.owner == owner)
     color_map = {p.name: p.color for p in proj_query.all()}
 
-    # Merge: include projects that have tasks OR have a color record
     all_names = set(counts.keys()) | set(color_map.keys())
-    result = []
-    for name in all_names:
-        result.append({
+    return [
+        {
             "name": name,
             "color": color_map.get(name, "#4073ff"),
             "total": counts.get(name, {}).get("total", 0),
             "pending": counts.get(name, {}).get("pending", 0),
-        })
-    return result
+        }
+        for name in all_names
+    ]
 
 
 @app.post("/api/projects")
