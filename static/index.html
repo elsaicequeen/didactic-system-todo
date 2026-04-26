@@ -171,6 +171,31 @@
 
     /* Keyboard hint */
     .kbd { display: inline-block; padding: 1px 5px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 3px; font-size: 11px; color: var(--text-muted); font-family: monospace; }
+
+    /* Sidebar info panels */
+    .sidebar-info-section { border-top: 1px solid #2a2a2a; }
+    .sidebar-info-toggle { display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 16px; background: none; border: none; cursor: pointer; color: var(--sidebar-muted); font-size: 12px; font-family: inherit; text-align: left; transition: color .12s; }
+    .sidebar-info-toggle:hover { color: var(--sidebar-text); }
+    .sidebar-info-toggle .toggle-chevron { margin-left: auto; transition: transform .15s; flex-shrink: 0; }
+    .sidebar-info-toggle.open { color: var(--sidebar-text); }
+    .sidebar-info-toggle.open .toggle-chevron { transform: rotate(90deg); }
+    .sidebar-info-panel { display: none; padding: 0 12px 12px; }
+    .sidebar-info-panel.open { display: block; }
+    .info-feature { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px; }
+    .info-feature-icon { width: 26px; height: 26px; border-radius: 5px; background: #2a2a2a; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+    .info-feature-text strong { display: block; font-size: 11.5px; font-weight: 600; color: var(--sidebar-text); margin-bottom: 1px; }
+    .info-feature-text span { font-size: 11px; color: var(--sidebar-muted); line-height: 1.45; }
+    .info-kbd { display: inline-block; padding: 0 4px; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 3px; font-size: 10px; color: #aaa; font-family: monospace; }
+    .changelog-entry { margin-bottom: 10px; }
+    .changelog-version { font-size: 11px; font-weight: 700; color: var(--sidebar-text); display: flex; align-items: center; gap: 6px; }
+    .changelog-date { font-weight: 400; color: var(--sidebar-muted); font-size: 10.5px; }
+    .changelog-items { margin-top: 4px; padding-left: 0; list-style: none; }
+    .changelog-items li { font-size: 11px; color: var(--sidebar-muted); line-height: 1.5; display: flex; gap: 5px; }
+    .changelog-items li::before { content: '·'; color: #555; flex-shrink: 0; }
+    .changelog-tag { display: inline-block; padding: 0 5px; border-radius: 3px; font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; margin-right: 3px; }
+    .tag-new { background: #1a3a2a; color: #4caf7d; }
+    .tag-fix { background: #1a2a3a; color: #5b9bd5; }
+    .sidebar-note { font-size: 10.5px; color: #555; line-height: 1.5; padding: 6px 8px; background: #262626; border-radius: 4px; margin-top: 4px; }
   </style>
 </head>
 <body>
@@ -214,6 +239,103 @@
         Add project
       </button>
     </div>
+
+    <!-- How to use -->
+    <div class="sidebar-info-section">
+      <button class="sidebar-info-toggle" id="guide-toggle" onclick="toggleSidebarPanel('guide')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        How to use
+        <svg class="toggle-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+      <div class="sidebar-info-panel" id="panel-guide">
+
+        <div class="info-feature">
+          <div class="info-feature-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></div>
+          <div class="info-feature-text">
+            <strong>Views</strong>
+            <span><b style="color:#bbb">Inbox</b> = unsorted tasks. <b style="color:#bbb">Today</b> = due today + overdue. <b style="color:#bbb">Upcoming</b> = future due dates. <b style="color:#bbb">All</b> = everything.</span>
+          </div>
+        </div>
+
+        <div class="info-feature">
+          <div class="info-feature-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+          <div class="info-feature-text">
+            <strong>Add a task</strong>
+            <span>Click the + bar or press <span class="info-kbd">Q</span>. Set priority, project, and due date inline before saving. Press <span class="info-kbd">Enter</span> to submit fast.</span>
+          </div>
+        </div>
+
+        <div class="info-feature">
+          <div class="info-feature-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2"><circle cx="12" cy="12" r="3"/><line x1="4" y1="4" x2="4.01" y2="4"/><line x1="20" y1="4" x2="20.01" y2="4"/><line x1="4" y1="20" x2="4.01" y2="20"/><line x1="20" y1="20" x2="20.01" y2="20"/></svg></div>
+          <div class="info-feature-text">
+            <strong>Priority</strong>
+            <span><b style="color:#db4035">P1</b> urgent · <b style="color:#ff8c00">P2</b> high · <b style="color:#4073ff">P3</b> medium · <b style="color:#777">P4</b> normal. Tasks sort by priority automatically.</span>
+          </div>
+        </div>
+
+        <div class="info-feature">
+          <div class="info-feature-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>
+          <div class="info-feature-text">
+            <strong>Projects</strong>
+            <span>Click <b style="color:#bbb">Add project</b> below, pick a color. Tasks added from inside a project view inherit that project. Reassign anytime via the edit modal.</span>
+          </div>
+        </div>
+
+        <div class="info-feature">
+          <div class="info-feature-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg></div>
+          <div class="info-feature-text">
+            <strong>Due dates</strong>
+            <span><b style="color:#db4035">Red</b> = overdue. <b style="color:#ff8c00">Orange</b> = due today. Grey = future. Overdue tasks appear in Today view automatically.</span>
+          </div>
+        </div>
+
+        <div class="info-feature">
+          <div class="info-feature-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>
+          <div class="info-feature-text">
+            <strong>Edit a task</strong>
+            <span>Click the task title or the pencil icon on hover. The edit modal lets you change everything including description and project.</span>
+          </div>
+        </div>
+
+        <div class="sidebar-note">
+          ⚠️ Project <b style="color:#999">colors</b> are saved in this browser only (localStorage). Tasks and their project names always sync via the database.
+        </div>
+      </div>
+    </div>
+
+    <!-- Changelog -->
+    <div class="sidebar-info-section">
+      <button class="sidebar-info-toggle" id="changelog-toggle" onclick="toggleSidebarPanel('changelog')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Changelog
+        <svg class="toggle-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+      <div class="sidebar-info-panel" id="panel-changelog">
+
+        <div class="changelog-entry">
+          <div class="changelog-version">v1.1 <span class="changelog-date">Apr 26 2026</span></div>
+          <ul class="changelog-items">
+            <li><span class="changelog-tag tag-new">new</span> How to use guide in sidebar</li>
+            <li><span class="changelog-tag tag-new">new</span> Changelog panel in sidebar</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="changelog-version">v1.0 <span class="changelog-date">Apr 26 2026</span></div>
+          <ul class="changelog-items">
+            <li><span class="changelog-tag tag-new">new</span> Tasks with title, description, due date</li>
+            <li><span class="changelog-tag tag-new">new</span> Priority levels P1–P4 with color coding</li>
+            <li><span class="changelog-tag tag-new">new</span> Projects with color picker</li>
+            <li><span class="changelog-tag tag-new">new</span> Inbox, Today, Upcoming, All views</li>
+            <li><span class="changelog-tag tag-new">new</span> Inline add form + edit modal</li>
+            <li><span class="changelog-tag tag-new">new</span> Keyboard shortcut <span class="info-kbd">Q</span> to add</li>
+            <li><span class="changelog-tag tag-new">new</span> Railway + PostgreSQL deployment</li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+
   </nav>
 
   <!-- Main -->
@@ -712,6 +834,15 @@ function updateCounts() {
   const todayCount = pending.filter(t => t.due_date && t.due_date <= today).length;
   document.getElementById('count-inbox').textContent = inboxCount || '';
   document.getElementById('count-today').textContent = todayCount || '';
+}
+
+// ── Sidebar panels ───────────────────────────────────────────────────────────
+function toggleSidebarPanel(name) {
+  const panel = document.getElementById('panel-' + name);
+  const toggle = document.getElementById(name + '-toggle');
+  const isOpen = panel.classList.contains('open');
+  panel.classList.toggle('open', !isOpen);
+  toggle.classList.toggle('open', !isOpen);
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
