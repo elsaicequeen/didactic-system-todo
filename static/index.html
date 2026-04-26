@@ -260,8 +260,46 @@
       .view-title { font-size: 18px; }
       .task-area { padding: 12px 16px 80px; }
       .main { width: 100%; }
-      .quick-add { margin-bottom: 6px; }
+      .quick-add { margin-bottom: 6px; padding: 14px 12px; font-size: 14px; }
+
+      /* Add form: bigger touch targets, wrap meta, full-width actions */
+      .add-form { padding: 14px; }
+      .add-form-meta { flex-wrap: wrap; row-gap: 8px; }
+      .meta-btn { padding: 9px 12px; font-size: 13px; min-height: 38px; }
+      .form-actions { width: 100%; margin-left: 0; margin-top: 4px; gap: 6px; }
+      .form-actions .btn-submit { flex: 1; padding: 12px; font-size: 14px; min-height: 44px; }
+      .form-actions .btn-cancel { padding: 12px 18px; font-size: 14px; min-height: 44px; }
+
+      /* Tasks: more breathing room, always-visible actions */
+      .task-item { padding: 12px 8px; gap: 12px; }
+      .task-checkbox { width: 20px; height: 20px; margin-top: 1px; }
+      .task-actions { opacity: 1; }
+      .action-btn { width: 32px; height: 32px; }
+
+      /* Modals: full-width, stacked footer */
+      .modal { width: 100%; max-width: 96vw; }
+      .modal-meta { flex-wrap: wrap; gap: 6px; }
+      .modal-footer { flex-direction: column-reverse; gap: 10px; align-items: stretch; padding: 14px 20px 16px; }
+      .modal-footer > div { width: 100%; display: flex; gap: 8px; }
+      .modal-footer > div > button { flex: 1; padding: 12px; font-size: 14px; min-height: 44px; }
+      .modal-footer > button { padding: 12px; font-size: 14px; min-height: 44px; }
+
+      /* Hide the desktop kbd hint on mobile */
+      .quick-add .kbd { display: none; }
     }
+
+    /* Schedule prompt (Phase 1.1) */
+    .schedule-prompt { background: #fffbe6; border: 1px solid #fde68a; border-radius: var(--radius); padding: 10px 12px; margin-bottom: 10px; font-size: 13px; }
+    .schedule-prompt-title { font-weight: 500; color: #92400e; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+    .schedule-prompt-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .schedule-btn { padding: 7px 12px; border-radius: 14px; border: 1px solid #fde68a; background: #fff; cursor: pointer; font-size: 12.5px; font-family: inherit; color: #78350f; transition: background .12s; }
+    .schedule-btn:hover { background: #fef3c7; }
+    .schedule-btn.skip { color: var(--text-muted); border-color: transparent; background: none; }
+    .schedule-btn.skip:hover { color: var(--text); background: var(--surface); }
+
+    /* Frog task (Phase 1.5) */
+    .frog-icon { display: inline-block; margin-right: 4px; }
+    .frog-toggle.active { background: #d1fae5; border-color: #6ee7b7; color: #065f46; }
   </style>
 </head>
 <body>
@@ -389,6 +427,18 @@
       <div class="sidebar-info-panel" id="panel-changelog">
 
         <div class="changelog-entry">
+          <div class="changelog-version">v1.5 <span class="changelog-date">Apr 26 2026</span></div>
+          <ul class="changelog-items">
+            <li><span class="changelog-tag tag-fix">fix</span> Mobile add-task: typed text no longer wiped when chrono parses a date</li>
+            <li><span class="changelog-tag tag-fix">fix</span> Mobile layout: bigger tap targets, Add button no longer hides off-screen</li>
+            <li><span class="changelog-tag tag-new">new</span> 🐸 Eat the frog — mark one task as today's priority (surfaces first in Today)</li>
+            <li><span class="changelog-tag tag-new">new</span> Two-minute rule — type <span class="info-kbd">&lt;2min&gt;</span> in a task and get prompted to just do it now</li>
+            <li><span class="changelog-tag tag-new">new</span> "When will you do this?" prompt after creating a task with no due date</li>
+            <li><span class="changelog-tag tag-new">new</span> "Yesterday" pill on tasks that rolled over from yesterday</li>
+          </ul>
+        </div>
+
+        <div class="changelog-entry">
           <div class="changelog-version">v1.4 <span class="changelog-date">Apr 26 2026</span></div>
           <ul class="changelog-items">
             <li><span class="changelog-tag tag-new">new</span> Completed tasks tab in sidebar</li>
@@ -498,6 +548,10 @@
             <div class="dropdown-item" onclick="setEditRecur('monthly')">Monthly</div>
           </div>
         </div>
+        <button class="meta-btn frog-toggle" id="edit-frog-btn" onclick="toggleEditFrog()" title="Eat the frog — surfaced first in Today">
+          <span style="font-size:13px">🐸</span>
+          <span id="edit-frog-label">Frog</span>
+        </button>
       </div>
       <div id="edit-created" style="font-size:11px;color:var(--text-muted);margin-top:14px"></div>
     </div>
@@ -555,14 +609,18 @@ let state = {
   newPriority: 4,
   newProject: 'Inbox',
   newDue: '',
+  newTitle: '',           // preserved across re-renders so typing isn't wiped
+  newDesc: '',
   addFormOpen: false,
   selectedProjectColor: PROJECT_COLORS[4],
   sortBy: 'priority',   // 'priority' | 'due'
   sortDir: 'asc',
   newRecurrence: null,
   editRecurrence: null,
+  editIsFrog: false,
   newNlHint: null,        // {date, text} when chrono parses the title input
   toast: null,            // {msg, undoFn, timer}
+  scheduleHintTaskId: null, // Phase 1.1: prompt asking "when will you do this?"
 };
 
 // ── API ─────────────────────────────────────────────────────────────────────
@@ -640,6 +698,10 @@ function filteredTasks(done) {
     }
     return tasks;
   }
+  // Frog floats to the top in Today view (Phase 1.5).
+  if (state.view === 'today') {
+    return tasks.sort((a,b) => (b.is_frog?1:0) - (a.is_frog?1:0) || a.priority - b.priority || a.id - b.id);
+  }
   return tasks.sort((a,b) => a.priority - b.priority || a.id - b.id);
 }
 
@@ -653,7 +715,9 @@ const PRIORITY_META = {
 function dueMeta(dueDate) {
   if (!dueDate) return null;
   const today = new Date().toISOString().split('T')[0];
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
   const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+  if (dueDate === yesterday) return {cls:'overdue', label:'Yesterday'};
   if (dueDate < today) return {cls:'overdue', label: fmtDate(dueDate) + ' (overdue)'};
   if (dueDate === today) return {cls:'today', label:'Today'};
   if (dueDate === tomorrow) return {cls:'future', label:'Tomorrow'};
@@ -749,6 +813,25 @@ function renderTaskArea() {
 
   let html = '';
 
+  // Phase 1.1 — "When will you do this?" prompt right after a task with no due date is created.
+  if (state.scheduleHintTaskId) {
+    const t = state.tasks.find(x => x.id === state.scheduleHintTaskId);
+    if (t) {
+      html += `<div class="schedule-prompt">
+        <div class="schedule-prompt-title">📅 When will you do "${esc(t.title)}"?</div>
+        <div class="schedule-prompt-row">
+          <button class="schedule-btn" onclick="scheduleTask(0)">Today</button>
+          <button class="schedule-btn" onclick="scheduleTask(1)">Tomorrow</button>
+          <button class="schedule-btn" onclick="scheduleTask(2)">In 2 days</button>
+          <button class="schedule-btn" onclick="scheduleTask(7)">Next week</button>
+          <button class="schedule-btn skip" onclick="dismissSchedulePrompt()">Skip</button>
+        </div>
+      </div>`;
+    } else {
+      state.scheduleHintTaskId = null;
+    }
+  }
+
   // Add task button / form (hidden in Completed view)
   if (state.view !== 'completed') {
     if (state.addFormOpen) {
@@ -813,7 +896,7 @@ function renderTask(t) {
   return `<div class="task-item ${t.done?'done':''}" data-id="${t.id}">
     <input type="checkbox" class="task-checkbox ${pClass}" ${t.done?'checked':''} onchange="toggleTask(${t.id},this.checked)" />
     <div class="task-body">
-      <div class="task-title" data-tooltip="${esc(created + completed)}" onclick="openEditModal(${t.id})">${esc(t.title)}</div>
+      <div class="task-title" data-tooltip="${esc(created + completed)}" onclick="openEditModal(${t.id})">${t.is_frog ? '<span class="frog-icon" title="Today\'s frog">🐸</span>' : ''}${esc(t.title)}</div>
       ${t.description ? `<div class="task-desc">${esc(t.description)}</div>` : ''}
       ${dm ? `<span class="due-pill ${dm.cls}">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -842,13 +925,10 @@ function renderAddForm() {
   return `<div class="add-form">
     <div class="add-form-row">
       <span class="p-dot" style="background:${pm.color};width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:3px;align-self:flex-start"></span>
-      <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
-        <input id="new-task-input" type="text" placeholder='Task name (try "buy milk tomorrow 6pm")' oninput="handleNlParse(event)" onkeydown="handleAddKey(event)" />
-        ${state.newNlHint ? `<div class="nl-hint">
-          📅 Will set due to <b>${esc(state.newNlHint.label)}</b> and trim "${esc(state.newNlHint.text)}" from the title
-          <button class="nl-clear" onclick="clearNlHint()">don't</button>
-        </div>` : ''}
-        <textarea id="new-task-desc" placeholder="Description" rows="2" onkeydown="if(event.key==='Escape')closeAddForm()" style="border:none;outline:none;font-size:13px;font-family:inherit;color:var(--text-muted);resize:none;background:transparent;line-height:1.4;"></textarea>
+      <div style="flex:1;display:flex;flex-direction:column;gap:4px;min-width:0;">
+        <input id="new-task-input" type="text" value="${esc(state.newTitle)}" placeholder='Task name (try "buy milk tomorrow 6pm")' oninput="state.newTitle=this.value;handleNlParse(event)" onkeydown="handleAddKey(event)" autocomplete="off" autocapitalize="sentences" />
+        <div id="nl-hint-container">${renderNlHintHtml()}</div>
+        <textarea id="new-task-desc" placeholder="Description (optional)" rows="2" oninput="state.newDesc=this.value" onkeydown="if(event.key==='Escape')closeAddForm()" style="border:none;outline:none;font-size:13px;font-family:inherit;color:var(--text-muted);resize:none;background:transparent;line-height:1.4;">${esc(state.newDesc)}</textarea>
       </div>
     </div>
     <div class="add-form-meta">
@@ -908,6 +988,11 @@ function openAddForm() {
   else if (state.view === 'inbox') state.newProject = 'Inbox';
   state.addFormOpen = true;
   render();
+  // Scroll the form fully into view on mobile so the submit button is reachable.
+  setTimeout(() => {
+    const form = document.querySelector('.add-form');
+    if (form && window.innerWidth <= 640) form.scrollIntoView({block:'start', behavior:'smooth'});
+  }, 50);
 }
 
 function closeAddForm() {
@@ -917,6 +1002,8 @@ function closeAddForm() {
   state.newDue = '';
   state.newRecurrence = null;
   state.newNlHint = null;
+  state.newTitle = '';
+  state.newDesc = '';
   render();
 }
 
@@ -926,38 +1013,44 @@ function setNewRecur(r) {
   render();
 }
 
-// Parse natural-language dates inline. Updates the hint, doesn't mutate the title until submit.
+// Parse NL dates inline. Updates only the hint container — never re-renders the
+// add form while the user is typing (which would wipe input/textarea contents
+// and was the root cause of the "takes multiple attempts" mobile bug).
 let nlParseTimer = null;
 function handleNlParse(e) {
   if (typeof chrono === 'undefined') return;
   clearTimeout(nlParseTimer);
   nlParseTimer = setTimeout(() => {
-    const text = e.target.value;
-    if (!text || text.length < 3) {
-      if (state.newNlHint) { state.newNlHint = null; renderTaskArea(); }
-      return;
+    const text = state.newTitle;
+    let hint = null;
+    if (text && text.length >= 3) {
+      const results = chrono.parse(text, new Date(), {forwardDate: true});
+      if (results.length > 0) {
+        const r = results[0];
+        const date = r.start.date();
+        const iso = date.toISOString().split('T')[0];
+        hint = {
+          date: iso,
+          text: r.text,
+          label: fmtDate(iso) + (r.start.isCertain('hour') ? ' ' + date.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'}) : ''),
+        };
+      }
     }
-    const results = chrono.parse(text, new Date(), {forwardDate: true});
-    if (results.length === 0) {
-      if (state.newNlHint) { state.newNlHint = null; renderTaskArea(); }
-      return;
-    }
-    const r = results[0];
-    const date = r.start.date();
-    const iso = date.toISOString().split('T')[0];
-    state.newNlHint = {
-      date: iso,
-      text: r.text,
-      label: fmtDate(iso) + (r.start.isCertain('hour') ? ' ' + date.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'}) : ''),
-    };
-    renderTaskArea();
-    document.getElementById('new-task-input')?.focus();
-  }, 250);
+    state.newNlHint = hint;
+    const c = document.getElementById('nl-hint-container');
+    if (c) c.innerHTML = renderNlHintHtml();
+  }, 300);
+}
+
+function renderNlHintHtml() {
+  if (!state.newNlHint) return '';
+  return `<div class="nl-hint">📅 Will set due to <b>${esc(state.newNlHint.label)}</b> and trim "${esc(state.newNlHint.text)}" from the title <button class="nl-clear" onclick="clearNlHint()">don't</button></div>`;
 }
 
 function clearNlHint() {
   state.newNlHint = null;
-  renderTaskArea();
+  const c = document.getElementById('nl-hint-container');
+  if (c) c.innerHTML = '';
   document.getElementById('new-task-input')?.focus();
 }
 
@@ -967,9 +1060,10 @@ function handleAddKey(e) {
 }
 
 async function submitAddForm() {
-  let title = document.getElementById('new-task-input')?.value?.trim();
+  // Read straight from state (which is kept in sync via oninput) — DOM read is a fallback.
+  let title = (state.newTitle || document.getElementById('new-task-input')?.value || '').trim();
   if (!title) return;
-  const description = document.getElementById('new-task-desc')?.value?.trim() || null;
+  const description = (state.newDesc || document.getElementById('new-task-desc')?.value || '').trim() || null;
 
   // Apply NL date hint if present: trim phrase from title, override due date
   let dueDate = state.newDue || null;
@@ -978,7 +1072,20 @@ async function submitAddForm() {
     dueDate = state.newNlHint.date;
   }
 
-  await api('POST', '/api/tasks', {
+  // Phase 1.4 — two-minute rule. Detect <2min, <2 min, (2min) etc.
+  let done = false;
+  const twoMinRe = /[<(\[]?\s*2\s*min[s]?\s*[>)\]]?/i;
+  if (twoMinRe.test(title)) {
+    const stripped = title.replace(twoMinRe, '').replace(/\s+/g, ' ').trim();
+    if (confirm('Two-minute task — just do it now instead of saving?')) {
+      title = stripped || title;
+      done = true;
+    } else {
+      title = stripped || title;
+    }
+  }
+
+  const created = await api('POST', '/api/tasks', {
     title,
     description,
     priority: state.newPriority,
@@ -986,14 +1093,48 @@ async function submitAddForm() {
     due_date: dueDate,
     owner: state.currentUser,
     recurrence: state.newRecurrence,
+    done,
   });
+
   state.addFormOpen = false;
   state.newPriority = 4;
   state.newProject = 'Inbox';
   state.newDue = '';
   state.newRecurrence = null;
   state.newNlHint = null;
+  state.newTitle = '';
+  state.newDesc = '';
+
+  // Phase 1.1 — if no due date and not already done, prompt "when will you do this?"
+  if (!dueDate && !done && created?.id) {
+    state.scheduleHintTaskId = created.id;
+  }
+
   await loadTasks();
+}
+
+// Phase 1.1 — quick-schedule prompt
+async function scheduleTask(daysFromToday) {
+  const id = state.scheduleHintTaskId;
+  if (!id) return;
+  let dueDate = null;
+  if (daysFromToday !== null) {
+    const d = new Date();
+    d.setDate(d.getDate() + daysFromToday);
+    dueDate = d.toISOString().split('T')[0];
+  }
+  state.scheduleHintTaskId = null;
+  if (dueDate) {
+    await api('PATCH', `/api/tasks/${id}`, { due_date: dueDate });
+    await loadTasks();
+  } else {
+    render();
+  }
+}
+
+function dismissSchedulePrompt() {
+  state.scheduleHintTaskId = null;
+  render();
 }
 
 function todayIso() {
@@ -1067,10 +1208,12 @@ function openEditModal(id) {
   state.editPriority = task.priority;
   state.editProject = task.project;
   state.editRecurrence = task.recurrence || null;
+  state.editIsFrog = !!task.is_frog;
   document.getElementById('edit-title').value = task.title;
   document.getElementById('edit-desc').value = task.description || '';
   document.getElementById('edit-due').value = task.due_date || '';
   document.getElementById('edit-recur-label').textContent = task.recurrence || 'No repeat';
+  updateEditFrogUI();
   document.getElementById('edit-created').textContent =
     `Created ${fmtDateTime(task.created_at)}` + (task.completed_at ? ` · Completed ${fmtDateTime(task.completed_at)}` : '');
   updateEditPriorityUI();
@@ -1083,6 +1226,19 @@ function setEditRecur(r) {
   state.editRecurrence = r;
   document.getElementById('edit-recur-label').textContent = r || 'No repeat';
   closeAllDropdowns();
+}
+
+function toggleEditFrog() {
+  state.editIsFrog = !state.editIsFrog;
+  updateEditFrogUI();
+}
+
+function updateEditFrogUI() {
+  const btn = document.getElementById('edit-frog-btn');
+  const label = document.getElementById('edit-frog-label');
+  if (!btn) return;
+  btn.classList.toggle('active', state.editIsFrog);
+  label.textContent = state.editIsFrog ? "Today's frog" : 'Frog';
 }
 
 function closeEditModal() {
@@ -1129,6 +1285,7 @@ async function saveEditModal() {
     project: state.editProject,
     due_date: document.getElementById('edit-due').value || null,
     recurrence: state.editRecurrence,
+    is_frog: state.editIsFrog,
   });
   closeEditModal();
   await loadTasks();

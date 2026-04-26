@@ -32,6 +32,7 @@ class Task(Base):
     due_date = Column(String, nullable=True)
     owner = Column(String, default="Anish", server_default="Anish")
     recurrence = Column(String, nullable=True)  # 'daily' | 'weekdays' | 'weekly' | 'monthly'
+    is_frog = Column(Boolean, default=False, server_default="false")
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
     deleted_at = Column(DateTime, nullable=True)
@@ -54,6 +55,7 @@ with engine.connect() as conn:
         "ALTER TABLE tasks ADD COLUMN owner VARCHAR DEFAULT 'Anish'",
         "ALTER TABLE tasks ADD COLUMN recurrence VARCHAR",
         "ALTER TABLE tasks ADD COLUMN deleted_at TIMESTAMP",
+        "ALTER TABLE tasks ADD COLUMN is_frog BOOLEAN DEFAULT FALSE",
     ]:
         try:
             conn.execute(text(ddl))
@@ -110,6 +112,7 @@ class TaskCreate(BaseModel):
     due_date: Optional[str] = None
     owner: str = "Anish"
     recurrence: Optional[str] = None
+    done: Optional[bool] = False
 
 
 class TaskUpdate(BaseModel):
@@ -120,6 +123,7 @@ class TaskUpdate(BaseModel):
     project: Optional[str] = None
     due_date: Optional[str] = None
     recurrence: Optional[str] = None
+    is_frog: Optional[bool] = None
 
 
 class ProjectCreate(BaseModel):
@@ -151,7 +155,10 @@ def get_tasks(
 
 @app.post("/api/tasks")
 def create_task(task: TaskCreate, db: Session = Depends(get_db)):
-    db_task = Task(**task.dict())
+    data = task.dict()
+    if data.get("done"):
+        data["completed_at"] = datetime.utcnow()
+    db_task = Task(**data)
     db.add(db_task)
     db.commit()
     db.refresh(db_task)
@@ -181,8 +188,19 @@ def update_task(task_id: int, task: TaskUpdate, db: Session = Depends(get_db)):
 
     if update_data.get("done"):
         update_data["completed_at"] = datetime.utcnow()
+        # Completing a frog task naturally retires it.
+        update_data["is_frog"] = False
     elif "done" in update_data and not update_data["done"]:
         update_data["completed_at"] = None
+
+    # Only one frog at a time per user — clear it on others when setting.
+    if update_data.get("is_frog"):
+        db.query(Task).filter(
+            Task.owner == db_task.owner,
+            Task.id != db_task.id,
+            Task.is_frog == True,
+        ).update({"is_frog": False}, synchronize_session=False)
+
     for key, value in update_data.items():
         setattr(db_task, key, value)
     db.commit()
