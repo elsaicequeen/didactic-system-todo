@@ -237,6 +237,31 @@
     .tag-new { background: #1a3a2a; color: #4caf7d; }
     .tag-fix { background: #1a2a3a; color: #5b9bd5; }
     .sidebar-note { font-size: 10.5px; color: #555; line-height: 1.5; padding: 6px 8px; background: #262626; border-radius: 4px; margin-top: 4px; }
+
+    /* Mobile hamburger */
+    .hamburger { display: none; align-items: center; justify-content: center; width: 36px; height: 36px; border: none; background: none; cursor: pointer; color: var(--text-muted); border-radius: var(--radius); flex-shrink: 0; }
+    .hamburger:hover { background: var(--surface); color: var(--text); }
+
+    /* Sidebar backdrop (mobile) */
+    .sidebar-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 149; }
+    .sidebar-backdrop.open { display: block; }
+
+    @media (max-width: 640px) {
+      .sidebar {
+        position: fixed; top: 0; left: 0; bottom: 0;
+        z-index: 150; transform: translateX(-100%);
+        transition: transform .22s ease;
+        width: 260px; min-width: 260px;
+      }
+      .sidebar.mobile-open { transform: translateX(0); }
+      .hamburger { display: flex; }
+      .topbar { padding: 14px 16px 0; display: flex; flex-direction: column; gap: 0; }
+      .topbar-row { display: flex; align-items: center; gap: 10px; }
+      .view-title { font-size: 18px; }
+      .task-area { padding: 12px 16px 80px; }
+      .main { width: 100%; }
+      .quick-add { margin-bottom: 6px; }
+    }
   </style>
 </head>
 <body>
@@ -410,10 +435,18 @@
 
   </nav>
 
+  <!-- Sidebar backdrop (mobile) -->
+  <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="closeSidebar()"></div>
+
   <!-- Main -->
   <main class="main">
     <div class="topbar">
-      <div class="view-title" id="view-title">Inbox</div>
+      <div class="topbar-row">
+        <button class="hamburger" onclick="openSidebar()" aria-label="Menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="view-title" id="view-title">Inbox</div>
+      </div>
       <div class="view-subtitle" id="view-subtitle"></div>
       <div id="sort-bar"></div>
     </div>
@@ -498,6 +531,16 @@
 </div>
 
 <script>
+// ── Mobile sidebar ───────────────────────────────────────────────────────────
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('mobile-open');
+  document.getElementById('sidebar-backdrop').classList.add('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('mobile-open');
+  document.getElementById('sidebar-backdrop').classList.remove('open');
+}
+
 // ── State ───────────────────────────────────────────────────────────────────
 const PROJECT_COLORS = ['#e44332','#e9952c','#fad000','#afb83b','#7ecc49','#299438','#6accbc','#158fad','#14aaf5','#96c3eb','#4073ff','#884dff','#af38eb','#eb96eb','#e05194','#ff8d85','#808080','#b8b8b8'];
 let state = {
@@ -563,6 +606,7 @@ function setView(view, el) {
   state.addFormOpen = false;
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   if (el) el.classList.add('active');
+  closeSidebar();
   render();
 }
 
