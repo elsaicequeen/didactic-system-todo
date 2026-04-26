@@ -682,11 +682,14 @@ function renderAddForm() {
             </div>`).join('')}
         </div>
       </div>
-      <button class="meta-btn ${state.newDue === todayIso() ? 'has-value' : ''}" onclick="setNewDueToday()" style="gap:4px">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg>
-        ${state.newDue ? fmtDate(state.newDue) : 'Due date'}
-      </button>
-      <input type="date" id="new-due-input" value="${state.newDue}" onchange="state.newDue=this.value;render()" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0" />
+      <div style="position:relative;display:inline-flex;align-items:center;">
+        <button class="meta-btn ${state.newDue ? 'has-value' : ''}" onclick="document.getElementById('new-due-input').showPicker()" style="gap:4px">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg>
+          ${state.newDue ? fmtDate(state.newDue) : 'Due date'}
+        </button>
+        ${state.newDue ? `<button onclick="state.newDue='';render()" style="margin-left:-4px;padding:0 4px;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:14px;line-height:1;" title="Clear date">×</button>` : ''}
+        <input type="date" id="new-due-input" value="${state.newDue}" onchange="state.newDue=this.value;render()" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0" />
+      </div>
       <div class="form-actions">
         <button class="btn-cancel" onclick="closeAddForm()">Cancel</button>
         <button class="btn-submit" onclick="submitAddForm()">Add task</button>
