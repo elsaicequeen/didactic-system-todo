@@ -315,7 +315,7 @@
         </div>
 
         <div class="sidebar-note">
-          ⚠️ Project <b style="color:#999">colors</b> are saved in this browser only (localStorage). Tasks and their project names always sync via the database.
+          Project colors are saved in the database and sync across all devices.
         </div>
       </div>
     </div>
@@ -328,6 +328,16 @@
         <svg class="toggle-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
       </button>
       <div class="sidebar-info-panel" id="panel-changelog">
+
+        <div class="changelog-entry">
+          <div class="changelog-version">v1.3 <span class="changelog-date">Apr 26 2026</span></div>
+          <ul class="changelog-items">
+            <li><span class="changelog-tag tag-new">new</span> Anish / Prerana user tabs — separate task lists</li>
+            <li><span class="changelog-tag tag-new">new</span> Project colors saved in DB, sync across devices</li>
+            <li><span class="changelog-tag tag-new">new</span> Due date pill on tasks (red/orange/grey)</li>
+            <li><span class="changelog-tag tag-fix">fix</span> Today view explains why tasks may be missing</li>
+          </ul>
+        </div>
 
         <div class="changelog-entry">
           <div class="changelog-version">v1.1 <span class="changelog-date">Apr 26 2026</span></div>
@@ -428,8 +438,7 @@ let state = {
   view: 'inbox',
   currentUser: localStorage.getItem('currentUser') || 'Anish',
   tasks: [],
-  projects: [],
-  projectColors: JSON.parse(localStorage.getItem('projectColors') || '{}'),
+  projects: [],   // [{name, color, total, pending}] — sourced from DB
   completedOpen: false,
   editTaskId: null,
   editPriority: 4,
@@ -522,7 +531,8 @@ function fmtDate(iso) {
 }
 
 function projectColor(name) {
-  return state.projectColors[name] || PROJECT_COLORS[0];
+  const p = state.projects.find(p => p.name === name);
+  return p ? p.color : '#4073ff';
 }
 
 // ── Render ───────────────────────────────────────────────────────────────────
@@ -550,22 +560,17 @@ function renderTitle() {
 
 function renderSidebar() {
   const nav = document.getElementById('project-nav');
-  const allProjects = [...new Set([...state.projects.map(p=>p.name), ...Object.keys(state.projectColors)])].filter(p=>p!=='Inbox');
-  nav.innerHTML = allProjects.map(name => {
-    const info = state.projects.find(p=>p.name===name) || {pending:0};
-    const color = projectColor(name);
-    const active = state.view === 'project:' + name;
-    return `<div class="nav-item ${active?'active':''}" data-view="project:${name}" onclick="setView('project:${encodeURIComponent(name)}',this)" data-name="${name}">
-      <span class="project-dot" style="background:${color}"></span>
-      <span class="label">${esc(name)}</span>
-      <span class="count">${info.pending||''}</span>
+  const projects = state.projects.filter(p => p.name !== 'Inbox');
+  nav.innerHTML = projects.map(p => {
+    const active = state.view === 'project:' + p.name;
+    return `<div class="nav-item ${active?'active':''}" data-name="${esc(p.name)}">
+      <span class="project-dot" style="background:${p.color}"></span>
+      <span class="label">${esc(p.name)}</span>
+      <span class="count">${p.pending||''}</span>
     </div>`;
   }).join('');
-  // fix onclick for encoded names
   nav.querySelectorAll('.nav-item').forEach(el => {
-    el.onclick = function() {
-      setView('project:' + el.dataset.name, el);
-    };
+    el.onclick = function() { setView('project:' + el.dataset.name, el); };
   });
 }
 
@@ -671,7 +676,7 @@ function renderAddForm() {
           ${esc(projectLabel)}
         </button>
         <div class="dropdown-menu" id="new-project-dd" style="display:none">
-          ${['Inbox',...new Set([...state.projects.map(p=>p.name),...Object.keys(state.projectColors)].filter(p=>p!=='Inbox'))].map(p=>`
+          ${['Inbox',...state.projects.filter(p=>p.name!=='Inbox').map(p=>p.name)].map(p=>`
             <div class="dropdown-item" onclick="setNewProject('${esc(p)}')">
               <span class="p-dot" style="background:${projectColor(p)}"></span>${esc(p)}
             </div>`).join('')}
@@ -797,7 +802,7 @@ function updateEditProjectUI() {
 
 function populateEditProjectDropdown() {
   const dd = document.getElementById('edit-project-dd');
-  const allP = ['Inbox', ...new Set([...state.projects.map(p=>p.name),...Object.keys(state.projectColors)].filter(p=>p!=='Inbox'))];
+  const allP = ['Inbox', ...state.projects.filter(p=>p.name!=='Inbox').map(p=>p.name)];
   dd.innerHTML = allP.map(p => `<div class="dropdown-item" onclick="setEditProject('${esc(p)}')">
     <span class="p-dot" style="background:${projectColor(p)}"></span>${esc(p)}
   </div>`).join('');
@@ -860,19 +865,17 @@ function selectColor(c) {
   renderColorRow();
 }
 
-function saveNewProject() {
+async function saveNewProject() {
   const name = document.getElementById('new-project-name').value.trim();
   if (!name) return;
-  state.projectColors[name] = state.selectedProjectColor;
-  localStorage.setItem('projectColors', JSON.stringify(state.projectColors));
-  closeProjectModal();
-  renderSidebar();
-  setView('project:' + name, null);
-  // highlight correct nav item after re-render
-  document.querySelectorAll('#project-nav .nav-item').forEach(el => {
-    if (el.dataset.name === name) el.classList.add('active');
-    else el.classList.remove('active');
+  await api('POST', '/api/projects', {
+    name,
+    color: state.selectedProjectColor,
+    owner: state.currentUser,
   });
+  closeProjectModal();
+  await loadProjects();
+  setView('project:' + name, null);
 }
 
 // ── Counts ────────────────────────────────────────────────────────────────────

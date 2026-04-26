@@ -34,15 +34,23 @@ class Task(Base):
     completed_at = Column(DateTime, nullable=True)
 
 
+class Project(Base):
+    __tablename__ = "projects"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    color = Column(String, default="#4073ff")
+    owner = Column(String, nullable=False)
+
+
 Base.metadata.create_all(bind=engine)
 
-# Add owner column to existing tables that predate this migration
+# Migrate: add owner column to tasks if it predates this column
 with engine.connect() as conn:
     try:
         conn.execute(text("ALTER TABLE tasks ADD COLUMN owner VARCHAR DEFAULT 'Anish'"))
         conn.commit()
     except Exception:
-        pass  # column already exists
+        pass
 
 app = FastAPI()
 
@@ -71,6 +79,16 @@ class TaskUpdate(BaseModel):
     priority: Optional[int] = None
     project: Optional[str] = None
     due_date: Optional[str] = None
+
+
+class ProjectCreate(BaseModel):
+    name: str
+    color: str = "#4073ff"
+    owner: str = "Anish"
+
+
+class ProjectUpdate(BaseModel):
+    color: str
 
 
 @app.get("/api/tasks")
@@ -128,18 +146,71 @@ def delete_task(task_id: int, db: Session = Depends(get_db)):
 
 @app.get("/api/projects")
 def get_projects(owner: Optional[str] = None, db: Session = Depends(get_db)):
-    query = db.query(Task.project, Task.done)
+    # Task counts per project
+    task_query = db.query(Task.project, Task.done)
     if owner:
-        query = query.filter(Task.owner == owner)
-    counts = {}
-    for row in query.all():
+        task_query = task_query.filter(Task.owner == owner)
+    counts: dict = {}
+    for row in task_query.all():
         p = row[0]
         if p not in counts:
             counts[p] = {"total": 0, "pending": 0}
         counts[p]["total"] += 1
         if not row[1]:
             counts[p]["pending"] += 1
-    return [{"name": p, "total": v["total"], "pending": v["pending"]} for p, v in counts.items()]
+
+    # Colors from projects table
+    proj_query = db.query(Project)
+    if owner:
+        proj_query = proj_query.filter(Project.owner == owner)
+    color_map = {p.name: p.color for p in proj_query.all()}
+
+    # Merge: include projects that have tasks OR have a color record
+    all_names = set(counts.keys()) | set(color_map.keys())
+    result = []
+    for name in all_names:
+        result.append({
+            "name": name,
+            "color": color_map.get(name, "#4073ff"),
+            "total": counts.get(name, {}).get("total", 0),
+            "pending": counts.get(name, {}).get("pending", 0),
+        })
+    return result
+
+
+@app.post("/api/projects")
+def create_project(proj: ProjectCreate, db: Session = Depends(get_db)):
+    existing = db.query(Project).filter(Project.name == proj.name, Project.owner == proj.owner).first()
+    if existing:
+        existing.color = proj.color
+        db.commit()
+        db.refresh(existing)
+        return existing
+    db_proj = Project(**proj.dict())
+    db.add(db_proj)
+    db.commit()
+    db.refresh(db_proj)
+    return db_proj
+
+
+@app.patch("/api/projects/{project_name}")
+def update_project_color(project_name: str, update: ProjectUpdate, owner: str = "Anish", db: Session = Depends(get_db)):
+    proj = db.query(Project).filter(Project.name == project_name, Project.owner == owner).first()
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+    proj.color = update.color
+    db.commit()
+    db.refresh(proj)
+    return proj
+
+
+@app.delete("/api/projects/{project_name}")
+def delete_project(project_name: str, owner: str = "Anish", db: Session = Depends(get_db)):
+    proj = db.query(Project).filter(Project.name == project_name, Project.owner == owner).first()
+    if proj:
+        db.delete(proj)
+        db.commit()
+    return {"ok": True}
 
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
