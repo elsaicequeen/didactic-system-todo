@@ -708,8 +708,11 @@ function renderAddForm() {
   const projectLabel = state.newProject;
   return `<div class="add-form">
     <div class="add-form-row">
-      <span class="p-dot" style="background:${pm.color};width:10px;height:10px;border-radius:50%;flex-shrink:0"></span>
-      <input id="new-task-input" type="text" placeholder="Task name" onkeydown="handleAddKey(event)" />
+      <span class="p-dot" style="background:${pm.color};width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:3px;align-self:flex-start"></span>
+      <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
+        <input id="new-task-input" type="text" placeholder="Task name" onkeydown="handleAddKey(event)" />
+        <textarea id="new-task-desc" placeholder="Description" rows="2" onkeydown="if(event.key==='Escape')closeAddForm()" style="border:none;outline:none;font-size:13px;font-family:inherit;color:var(--text-muted);resize:none;background:transparent;line-height:1.4;"></textarea>
+      </div>
     </div>
     <div class="add-form-meta">
       <div class="priority-dropdown" style="position:relative">
@@ -773,8 +776,10 @@ function handleAddKey(e) {
 async function submitAddForm() {
   const title = document.getElementById('new-task-input')?.value?.trim();
   if (!title) return;
+  const description = document.getElementById('new-task-desc')?.value?.trim() || null;
   await api('POST', '/api/tasks', {
     title,
+    description,
     priority: state.newPriority,
     project: state.newProject,
     due_date: state.newDue || null,
